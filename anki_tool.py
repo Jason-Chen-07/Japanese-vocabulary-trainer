@@ -20,13 +20,13 @@ print("✅ File loaded successfully!")
 print("📊 Detected columns:", list(df.columns))
 
 # ========= 3. Column Settings =========
-WORD_COL       = df.columns[0]   # 標準的な表記
-SPELLING_COL   = df.columns[1]   # 読み
-DIFFICULTY_COL = df.columns[2]   # 語彙の難易度
-POS_COL        = df.columns[3]   # 品詞1（词性）
-GOSHU_COL      = df.columns[5]   # 語種（语种）
+WORD_COL       = df.columns[0]   # 標準的な表記  Standard notation
+SPELLING_COL   = df.columns[1]   # 読み         reading (pronunciation)
+DIFFICULTY_COL = df.columns[2]   # 語彙の難易度  vocabulary difficulty
+POS_COL        = df.columns[3]   # 品詞1（词性） part of speech
+GOSHU_COL      = df.columns[5]   # 語種（语种）  word origin (lexical category)
 
-# ========= 4. 通用选择菜单函数 =========
+# ========= 4. General-purpose selection menu function =========
 def choose_from_list(title, options, allow_all=True, all_label="All (no filter)"):
     """
     通用菜单：传入标题和选项列表，返回选中的值，None 表示全选。
