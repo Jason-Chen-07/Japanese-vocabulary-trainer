@@ -1,6 +1,63 @@
 import pandas as pd
 import random
 import os
+import sys
+
+# ========= 0. 跨平台单键读取 =========
+if sys.platform == "win32":
+    import msvcrt
+
+    def get_single_key(prompt):
+        print(prompt, end="", flush=True)
+        while True:
+            key = msvcrt.getwch()
+            if key in ("\x00", "\xe0"):
+                msvcrt.getwch()
+                continue
+            if key in ("\r", "\n"):
+                print()
+                return "enter"
+            if key == " ":
+                print()
+                return "space"
+            if key.lower() == "q":
+                print()
+                return "q"
+            print(f"\n  ⚠️  Invalid key. Press Enter(✅) / Space(❌) / Q(quit)", end="", flush=True)
+
+else:
+    # Mac / Linux
+    import tty
+    import termios
+
+    def get_single_key(prompt):
+        print(prompt, end="", flush=True)
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            while True:
+                key = sys.stdin.read(1)
+                # 处理方向键等转义序列（ESC + [ + X），直接吞掉
+                if key == "\x1b":
+                    sys.stdin.read(2)
+                    continue
+                if key in ("\r", "\n"):
+                    print()
+                    return "enter"
+                if key == " ":
+                    print()
+                    return "space"
+                if key.lower() == "q":
+                    print()
+                    return "q"
+                # Ctrl+C 手动触发中断
+                if key == "\x03":
+                    raise KeyboardInterrupt
+                print(f"\n  ⚠️  Invalid key. Press Enter(✅) / Space(❌) / Q(quit)", end="", flush=True)
+        finally:
+            # 无论如何都还原终端设置，防止终端卡住
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 # ========= 1. File Path =========
 file_path = r"C:\Users\chenj\OneDrive\goi - 副本.xlsx"
@@ -20,17 +77,14 @@ print("✅ File loaded successfully!")
 print("📊 Detected columns:", list(df.columns))
 
 # ========= 3. Column Settings =========
-WORD_COL       = df.columns[0]   # 標準的な表記  Standard notation
-SPELLING_COL   = df.columns[1]   # 読み         reading (pronunciation)
-DIFFICULTY_COL = df.columns[2]   # 語彙の難易度  vocabulary difficulty
-POS_COL        = df.columns[3]   # 品詞1（词性） part of speech
-GOSHU_COL      = df.columns[5]   # 語種（语种）  word origin (lexical category)
+WORD_COL       = df.columns[0]
+SPELLING_COL   = df.columns[1]
+DIFFICULTY_COL = df.columns[2]
+POS_COL        = df.columns[3]
+GOSHU_COL      = df.columns[5]
 
-# ========= 4. General-purpose selection menu function =========
+# ========= 4. 通用选择菜单函数 =========
 def choose_from_list(title, options, allow_all=True, all_label="All (no filter)"):
-    """
-    通用菜单：传入标题和选项列表，返回选中的值，None 表示全选。
-    """
     print("\n" + "=" * 50)
     print(f"  {title}")
     print("=" * 50)
@@ -39,7 +93,6 @@ def choose_from_list(title, options, allow_all=True, all_label="All (no filter)"
     for i, opt in enumerate(options, 1):
         print(f"  [{i}]  {opt}")
     print("=" * 50)
-
     max_choice = len(options)
     while True:
         choice = input(f"👉 Enter a number (0–{max_choice}): ").strip()
@@ -61,7 +114,6 @@ LEVEL_LABELS = {
     "上級後半": "Advanced  (Part 2)",
 }
 
-# 展示难度时附上英文说明
 level_display = [f"{lvl}  ({LEVEL_LABELS[lvl]})" for lvl in LEVELS]
 
 print("\n" + "=" * 50)
@@ -84,7 +136,6 @@ while True:
     else:
         print(f"⚠️  Invalid input.")
 
-# 第一层过滤
 if selected_level:
     df_step1 = df[df[DIFFICULTY_COL].astype(str).str.contains(selected_level, na=False)]
 else:
@@ -96,10 +147,8 @@ if df_step1.empty:
 
 print(f"\n  ✅ Difficulty: {selected_level or 'All'}  →  {len(df_step1)} words remaining.")
 
-# ========= 6. 第二层：选语种（語種） =========
-# 从第一层筛选结果中动态读取唯一值，排序后展示
+# ========= 6. 第二层：选语种 =========
 goshu_options = sorted(df_step1[GOSHU_COL].dropna().astype(str).unique().tolist())
-
 selected_goshu = choose_from_list(
     title="🌐 Step 2 — Choose word origin（語種）",
     options=goshu_options,
@@ -107,22 +156,19 @@ selected_goshu = choose_from_list(
     all_label="All origins (no filter)"
 )
 
-# 第二层过滤
 if selected_goshu:
     df_step2 = df_step1[df_step1[GOSHU_COL].astype(str) == selected_goshu]
 else:
     df_step2 = df_step1.copy()
 
 if df_step2.empty:
-    print(f"❌ No words found for 語種 '{selected_goshu}' under difficulty '{selected_level or 'All'}'.")
+    print(f"❌ No words found for 語種 '{selected_goshu}'.")
     exit()
 
 print(f"\n  ✅ 語種: {selected_goshu or 'All'}  →  {len(df_step2)} words remaining.")
 
-# ========= 7. 第三层：选词性（品詞1） =========
-# 从第二层筛选结果中动态读取唯一值
+# ========= 7. 第三层：选词性 =========
 pos_options = sorted(df_step2[POS_COL].dropna().astype(str).unique().tolist())
-
 selected_pos = choose_from_list(
     title="🔤 Step 3 — Choose part of speech（品詞1）",
     options=pos_options,
@@ -130,7 +176,6 @@ selected_pos = choose_from_list(
     all_label="All parts of speech (no filter)"
 )
 
-# 第三层过滤
 if selected_pos:
     df_step3 = df_step2[df_step2[POS_COL].astype(str) == selected_pos]
 else:
@@ -144,7 +189,7 @@ if df_step3.empty:
     print("👉 Please restart and try a different combination.")
     exit()
 
-# ========= 8. 最终结果汇总 =========
+# ========= 8. 汇总 =========
 words = df_step3.to_dict(orient="records")
 
 print("\n" + "=" * 50)
@@ -158,7 +203,10 @@ print("=" * 50)
 
 # ========= 9. Wrong-Answer Bank =========
 wrong_words = []
-print("\n🎯 Let's study!  (y = I know it / n = I don't know it / q = quit)\n")
+print("\n🎯 Let's study!")
+print("   ↵ Enter  =  ✅ I know it")
+print("   Space    =  ❌ I don't know it")
+print("   Q        =  🚪 Quit\n")
 
 # ========= 10. Main Loop =========
 while True:
@@ -172,26 +220,25 @@ while True:
     print("\n" + "=" * 50)
     print(f"  {tag}")
     print(f"  📌 Word:     {word[WORD_COL]}")
-    input("  👉 Press Enter to reveal the spelling...")
+
+    get_single_key("  👉 Press any key to reveal spelling... ")
     print(f"  🔤 Spelling: {word[SPELLING_COL]}")
 
-    result = input("  ❓ Did you know it? (y/n/q): ").strip().lower()
+    key = get_single_key("  ❓ Know it?  [ ↵ Enter = ✅  |  Space = ❌  |  Q = quit ] ")
 
-    if result == "q":
+    if key == "q":
         print("\n👋 Goodbye! Great work today.")
         break
-    elif result == "n":
+    elif key == "space":
         if word not in wrong_words:
             wrong_words.append(word)
         print("  ❌ Added to wrong-answer bank.")
-    elif result == "y":
+    elif key == "enter":
         if word in wrong_words:
             wrong_words.remove(word)
             print("  ✅ Removed from wrong-answer bank. Nice!")
         else:
             print("  ✅ Nice work!")
-    else:
-        print("  ⚠️  Invalid input — please enter y, n, or q.")
 
     print(f"  📌 Wrong-answer bank: {len(wrong_words)} word(s)")
 
